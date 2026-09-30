@@ -55,8 +55,8 @@ Actions.
 > architecture on other models.
 
 ```bash
-./miwifi_root.py --push dropbear    /data/dropbear
-./miwifi_root.py --push dropbearkey /data/dropbearkey
+./miwifi_root.py --push bins/dropbear    /data/dropbear
+./miwifi_root.py --push bins/dropbearkey /data/dropbearkey
 ./miwifi_root.py --cmd 'chmod +x /data/dropbear /data/dropbearkey;
   mkdir -p /data/etc/dropbear;
   [ -f /data/etc/dropbear/hk ] || /data/dropbearkey -t ed25519 -f /data/etc/dropbear/hk'

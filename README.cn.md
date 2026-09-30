@@ -49,8 +49,8 @@ export MIWIFI_PASS='你的Web管理密码'
 > 预编译 dropbear 是按 `armv7 + soft-float + musl` 编译的，其他型号需先确认目标架构。
 
 ```bash
-./miwifi_root.py --push dropbear    /data/dropbear
-./miwifi_root.py --push dropbearkey /data/dropbearkey
+./miwifi_root.py --push bins/dropbear    /data/dropbear
+./miwifi_root.py --push bins/dropbearkey /data/dropbearkey
 ./miwifi_root.py --cmd 'chmod +x /data/dropbear /data/dropbearkey;
   mkdir -p /data/etc/dropbear;
   [ -f /data/etc/dropbear/hk ] || /data/dropbearkey -t ed25519 -f /data/etc/dropbear/hk'
