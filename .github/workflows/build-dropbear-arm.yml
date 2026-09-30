@@ -179,7 +179,7 @@ jobs:
           tar czf "be5000-root-${VER}-armv7.tar.gz" "$STAGE" BUNDLE-MANIFEST.txt
           sha256sum "be5000-root-${VER}-armv7.tar.gz" | tee -a dist/SHA256SUMS.txt
 
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
           printf '%s\n' \
             "Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             "from mkj/dropbear commit $SHA, against musl $MUSL." \
@@ -188,7 +188,7 @@ jobs:
             "binaries under be5000_bins/. Unpack it and run --verify first." \
             "" \
             "Verify: sha256sum -c <(grep dropbear SHA256SUMS.txt)" > NOTES.md
-          gh release create "$TAG" \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
             "be5000-root-${VER}-armv7.tar.gz" \
             dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt BUNDLE-MANIFEST.txt \
             --title "dropbear ${VER} armv7 static (soft-float, EABI5)" \
