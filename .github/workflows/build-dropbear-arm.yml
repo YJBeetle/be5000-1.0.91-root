@@ -57,6 +57,11 @@ jobs:
       ABI_CFLAGS: "-O2 -march=armv7-a -mfloat-abi=soft"
 
     steps:
+      - name: Check out this repo (for the release bundle)
+        uses: actions/checkout@v4
+        with:
+          path: self
+
       - name: Install cross toolchain (Debian/Ubuntu archive)
         run: |
           set -eux
@@ -151,7 +156,7 @@ jobs:
           if-no-files-found: error
 
       # Actions artifacts cannot be downloaded without a token; Release assets
-      # can, which is what lets be5000_root.py --fetch pull them at runtime.
+      # can. Everything ships as one bundle so nothing is fetched at runtime.
       - name: Publish as a GitHub Release
         if: github.event.inputs.publish_release == 'true'
         env:
@@ -159,10 +164,28 @@ jobs:
         run: |
           set -eux
           TAG="dropbear-${VER}-armv7-static"
+          STAGE="be5000-root"
+          mkdir -p "$STAGE/be5000_bins"
+          cp dropbear dropbearkey SHA256SUMS.txt "$STAGE/be5000_bins/"
+          cp "$STAGE/be5000_bins/SHA256SUMS.txt" "$STAGE/SHA256SUMS.txt"
+          for f in be5000_root.py README.md README.cn.md; do
+            [ -f "self/$f" ] && cp "self/$f" "$STAGE/" || echo "not in repo yet, skipped: $f"
+          done
+          ( cd "$STAGE" && find . -type f -printf '%P\n' | sort > ../BUNDLE-MANIFEST.txt )
+          tar czf "be5000-root-${VER}-armv7.tar.gz" "$STAGE" BUNDLE-MANIFEST.txt
+          sha256sum "be5000-root-${VER}-armv7.tar.gz" | tee -a SHA256SUMS.txt
+
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" dropbear dropbearkey SHA256SUMS.txt \
+          printf '%s\n' \
+            "Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            "from mkj/dropbear commit $SHA, against musl $MUSL." \
+            "" \
+            "be5000-root-${VER}-armv7.tar.gz is the whole tool: script, docs and the" \
+            "binaries under be5000_bins/. Unpack it and run --verify first." \
+            "" \
+            "Verify: sha256sum -c <(grep dropbear SHA256SUMS.txt)" > NOTES.md
+          gh release create "$TAG" \
+            "be5000-root-${VER}-armv7.tar.gz" \
+            dropbear dropbearkey SHA256SUMS.txt BUNDLE-MANIFEST.txt \
             --title "dropbear ${VER} armv7 static (soft-float, EABI5)" \
-            --notes "Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-from mkj/dropbear commit $SHA, against musl $MUSL.
-Verify with: sha256sum -c <(grep dropbear SHA256SUMS.txt)"
-          echo "fetch base url: https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/"
+            --notes-file NOTES.md
