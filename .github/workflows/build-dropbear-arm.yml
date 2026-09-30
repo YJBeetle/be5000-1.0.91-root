@@ -172,7 +172,7 @@ jobs:
           mkdir -p "$STAGE/be5000_bins"
           cp dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt "$STAGE/be5000_bins/"
           cp dist/SHA256SUMS.txt "$STAGE/SHA256SUMS.txt"
-          for f in be5000_root.py README.md README.cn.md; do
+          for f in be5000_root.py README.md README.cn.md LICENSE THIRD_PARTY_NOTICES.md; do
             [ -f "self/$f" ] && cp "self/$f" "$STAGE/" || echo "not in repo yet, skipped: $f"
           done
           ( cd "$STAGE" && find . -type f -printf '%P\n' | sort > ../BUNDLE-MANIFEST.txt )
@@ -191,5 +191,6 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
             "be5000-root-${VER}-armv7.tar.gz" \
             dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt BUNDLE-MANIFEST.txt \
+            self/LICENSE self/THIRD_PARTY_NOTICES.md \
             --title "dropbear ${VER} armv7 static (soft-float, EABI5)" \
             --notes-file NOTES.md
