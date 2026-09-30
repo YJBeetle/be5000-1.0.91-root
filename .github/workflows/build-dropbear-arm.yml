@@ -128,9 +128,10 @@ jobs:
           if readelf -l dropbear | grep -q INTERPRETER; then
             echo "FAIL: binary is dynamically linked, it will not run on the router"; exit 1
           fi
-          readelf -h dropbear | grep -q 'soft-float ABI' || { echo "FAIL: not soft-float"; exit 1; }
-          readelf -h dropbear | grep -q 'Version5 EABI' || { echo "FAIL: not EABI5"; exit 1; }
-          readelf  -h dropbear | grep -q 'Machine: ARM' || { echo "FAIL: not ARM"; exit 1; }
+          readelf -h dropbear | grep -Eq 'soft-float[[:space:]]+ABI' || { echo "FAIL: not soft-float"; exit 1; }
+          readelf -h dropbear | grep -Eq 'Version5[[:space:]]+EABI' || { echo "FAIL: not EABI5"; exit 1; }
+          readelf -h dropbear | grep -Eq 'Machine:[[:space:]]+ARM' || { echo "FAIL: not ARM"; exit 1; }
+          readelf -h dropbear | grep -Eq 'Class:[[:space:]]+ELF32' || { echo "FAIL: not ELF32"; exit 1; }
           strings dropbear | grep -m1 'SSH-2.0-dropbear_'
 
       - name: Hash the result
