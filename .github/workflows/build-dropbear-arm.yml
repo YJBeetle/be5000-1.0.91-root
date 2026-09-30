@@ -176,7 +176,6 @@ jobs:
           BUNDLE="miwifi-root-${RTAG}-armv7.tar.gz"
           mkdir -p "$STAGE/bins"
           cp dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt "$STAGE/bins/"
-          cp dist/SHA256SUMS.txt "$STAGE/SHA256SUMS.txt"
           for f in miwifi_root.py README.md README.cn.md LICENSE THIRD_PARTY_NOTICES.md; do
             [ -f "self/$f" ] && cp "self/$f" "$STAGE/" || echo "not in repo yet, skipped: $f"
           done
@@ -197,7 +196,6 @@ jobs:
             "Verify: sha256sum -c <(grep dropbear SHA256SUMS.txt)" > NOTES.md
           gh release create "$RTAG" --repo "$GITHUB_REPOSITORY" \
             "$BUNDLE" \
-            dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt BUNDLE-MANIFEST.txt \
-            self/LICENSE self/THIRD_PARTY_NOTICES.md \
+            dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt \
             --title "miwifi-root $RTAG" \
             --notes-file NOTES.md
