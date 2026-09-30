@@ -1,0 +1,168 @@
+name: build-dropbear-arm
+
+# Build a trustworthy static dropbear for the Xiaomi BE5000 (RD18).
+#
+# Target ABI, measured from the device and from a known-working reference
+# binary, not guessed:
+#   ELF32 / EM_ARM / ARM ABI version 5 / soft-float ABI
+#   /proc/cpuinfo: "CPU architecture: 7", no NEON flag reported
+#   /lib/ld-musl-arm.so.1 exists, /lib/ld-musl-armhf.so.1 does not
+#   => musl soft-float ABI. Linked fully static so no loader is needed.
+#
+# Provenance model
+#   DROPBEAR_SHA pins an exact commit in the official repository. The tag
+#   DROPBEAR_2026.94 there is a *lightweight* tag (it points straight at the
+#   commit, there is no signed tag object), so "git verify-tag" would always
+#   fail and claiming signature verification would be false. Pinning a
+#   commit SHA is the strongest anchor actually available, and the repo
+#   identity was confirmed both ways: matt.ucc.asn.au/dropbear links to
+#   github.com/mkj/dropbear, and that repo's homepage points back to the
+#   official site.
+#   musl comes from the official release tarball; its SHA256 is printed so it
+#   can be checked against musl.libc.org.
+#   The cross toolchain is plain apt from the Debian/Ubuntu archive.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dropbear_sha:
+        description: "exact dropbear commit to build"
+        default: "28216cd9af822732a1549b78621c2ea9a76a0fe5"
+        required: true
+      dropbear_version:
+        description: "used only for the artifact name"
+        default: "2026.94"
+        required: true
+      musl_version:
+        description: "musl release to build the toolchain against"
+        default: "1.2.5"
+        required: true
+      publish_release:
+        description: "also publish the binaries as a GitHub Release so be5000_root.py can fetch them"
+        type: choice
+        default: "false"
+        options: ["false", "true"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      SHA: ${{ github.event.inputs.dropbear_sha || '28216cd9af822732a1549b78621c2ea9a76a0fe5' }}
+      VER: ${{ github.event.inputs.dropbear_version || '2026.94' }}
+      MUSL: ${{ github.event.inputs.musl_version || '1.2.5' }}
+      HOST: arm-linux-gnueabi
+      ABI_CFLAGS: "-O2 -march=armv7-a -mfloat-abi=soft"
+
+    steps:
+      - name: Install cross toolchain (Debian/Ubuntu archive)
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross \
+            autoconf automake libtool make git curl unzip
+
+      - name: Check out dropbear at the pinned commit
+        run: |
+          set -eux
+          git clone --recursive https://github.com/mkj/dropbear.git \
+            "$GITHUB_WORKSPACE/dropbear"
+          cd "$GITHUB_WORKSPACE/dropbear"
+          git checkout --detach "$SHA"
+          test "$(git rev-parse HEAD)" = "$SHA"
+          git log -1 --format='pinned commit %H  %ad  %s'
+          # Confirm the pinned commit is what the release tag points at.
+          TAGSHA=$(git ls-remote origin "refs/tags/DROPBEAR_${VER}" | awk '{print $1}')
+          echo "tag DROPBEAR_${VER} -> ${TAGSHA}"
+          test "$TAGSHA" = "$SHA" || echo "::warning::pinned commit is not what the tag points at"
+
+      - name: Download musl and record its hash
+        run: |
+          set -eux
+          cd "$GITHUB_WORKSPACE"
+          curl -fsSLO "https://musl.libc.org/releases/musl-${MUSL}.tar.gz"
+          sha256sum "musl-${MUSL}.tar.gz" | tee musl.sha256
+          tar xzf "musl-${MUSL}.tar.gz"
+
+      - name: Build musl for ARM soft-float
+        run: |
+          set -eux
+          cd "$GITHUB_WORKSPACE/musl-${MUSL}"
+          ./configure --prefix=/opt/musl \
+            --enable-optimize --disable-shared --disable-multilib \
+            --disable-werror \
+            CROSS_COMPILE=${HOST}- CC=${HOST}-gcc CFLAGS="${ABI_CFLAGS}"
+          make -j"$(nproc)"
+          make install
+
+      - name: Build dropbear fully static
+        run: |
+          set -eux
+          cd "$GITHUB_WORKSPACE/dropbear"
+          [ -f configure ] || autoconf
+          mkdir -p build && cd build
+          ../configure --host=${HOST} \
+            CC=/opt/musl/bin/musl-gcc \
+            RANLIB=${HOST}-ranlib \
+            CFLAGS="${ABI_CFLAGS}" \
+            LDFLAGS="-static" \
+            --disable-zlib --disable-syslog --disable-lastlog \
+            --prefix=/usr
+          make -j"$(nproc)"
+
+      - name: Assert the output really matches the required ABI
+        run: |
+          set -eux
+          cd "$GITHUB_WORKSPACE/dropbear/build"
+          file dropbear dropbearkey
+          readelf -h dropbear | egrep 'Class|Machine|Flags'
+          # A dynamic binary would carry a PT_INTERP segment.
+          if readelf -l dropbear | grep -q INTERPRETER; then
+            echo "FAIL: binary is dynamically linked, it will not run on the router"; exit 1
+          fi
+          readelf -h dropbear | grep -q 'soft-float ABI' || { echo "FAIL: not soft-float"; exit 1; }
+          readelf -h dropbear | grep -q 'Version5 EABI' || { echo "FAIL: not EABI5"; exit 1; }
+          readelf  -h dropbear | grep -q 'Machine: ARM' || { echo "FAIL: not ARM"; exit 1; }
+          strings dropbear | grep -m1 'SSH-2.0-dropbear_'
+
+      - name: Hash the result
+        run: |
+          set -eux
+          cd "$GITHUB_WORKSPACE/dropbear/build"
+          sha256sum dropbear dropbearkey | tee SHA256SUMS.txt
+          {
+            echo "dropbear commit : $SHA"
+            echo "musl tarball    : $(cat "$GITHUB_WORKSPACE/musl.sha256")"
+            echo "built by        : $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> SHA256SUMS.txt
+          cp dropbear dropbearkey SHA256SUMS.txt "$GITHUB_WORKSPACE/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropbear-${{ github.event.inputs.dropbear_version }}-armv7-static
+          path: |
+            dropbear
+            dropbearkey
+            SHA256SUMS.txt
+          if-no-files-found: error
+
+      # Actions artifacts cannot be downloaded without a token; Release assets
+      # can, which is what lets be5000_root.py --fetch pull them at runtime.
+      - name: Publish as a GitHub Release
+        if: github.event.inputs.publish_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eux
+          TAG="dropbear-${VER}-armv7-static"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" dropbear dropbearkey SHA256SUMS.txt \
+            --title "dropbear ${VER} armv7 static (soft-float, EABI5)" \
+            --notes "Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+from mkj/dropbear commit $SHA, against musl $MUSL.
+Verify with: sha256sum -c <(grep dropbear SHA256SUMS.txt)"
+          echo "fetch base url: https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/"
