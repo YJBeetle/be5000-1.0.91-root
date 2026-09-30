@@ -48,7 +48,7 @@ what is in the Release so the attribution obligations are actually met.
 
 The MIT-style condition is "include the copyright and permission notice in all
 copies or substantial portions". Anyone redistributing the Release bundle should
-keep this file alongside `be5000_bins/`. The CI bundle includes it, and
+keep this file alongside `bins/`. The CI bundle includes it, and
 `SHA256SUMS.txt` pins exactly which upstream commit and which musl tarball the
 binaries came from, so the provenance travels with the artifact.
 

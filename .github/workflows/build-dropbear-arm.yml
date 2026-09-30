@@ -42,6 +42,10 @@ on:
         type: choice
         default: "false"
         options: ["false", "true"]
+      release_tag:
+        description: "release tag to create when publishing"
+        default: "v1.0"
+        required: true
 
 jobs:
   build:
@@ -53,6 +57,7 @@ jobs:
       SHA: ${{ github.event.inputs.dropbear_sha || '28216cd9af822732a1549b78621c2ea9a76a0fe5' }}
       VER: ${{ github.event.inputs.dropbear_version || '2026.94' }}
       MUSL: ${{ github.event.inputs.musl_version || '1.2.5' }}
+      RTAG: ${{ github.event.inputs.release_tag || 'v1.0' }}
       HOST: arm-linux-gnueabi
       ABI_CFLAGS: "-O2 -march=armv7-a -mfloat-abi=soft"
 
@@ -167,30 +172,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
-          TAG="dropbear-${VER}-armv7-static"
-          STAGE="be5000-root"
-          mkdir -p "$STAGE/be5000_bins"
-          cp dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt "$STAGE/be5000_bins/"
+          STAGE="miwifi-root"
+          BUNDLE="miwifi-root-${RTAG}-armv7.tar.gz"
+          mkdir -p "$STAGE/bins"
+          cp dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt "$STAGE/bins/"
           cp dist/SHA256SUMS.txt "$STAGE/SHA256SUMS.txt"
           for f in miwifi_root.py README.md README.cn.md LICENSE THIRD_PARTY_NOTICES.md; do
             [ -f "self/$f" ] && cp "self/$f" "$STAGE/" || echo "not in repo yet, skipped: $f"
           done
           ( cd "$STAGE" && find . -type f -printf '%P\n' | sort > ../BUNDLE-MANIFEST.txt )
-          tar czf "be5000-root-${VER}-armv7.tar.gz" "$STAGE" BUNDLE-MANIFEST.txt
-          sha256sum "be5000-root-${VER}-armv7.tar.gz" | tee -a dist/SHA256SUMS.txt
+          tar czf "$BUNDLE" "$STAGE" BUNDLE-MANIFEST.txt
+          sha256sum "$BUNDLE" | tee -a dist/SHA256SUMS.txt
 
-          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release delete "$RTAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
           printf '%s\n' \
             "Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             "from mkj/dropbear commit $SHA, against musl $MUSL." \
             "" \
-            "be5000-root-${VER}-armv7.tar.gz is the whole tool: script, docs and the" \
-            "binaries under be5000_bins/. Unpack it and run --verify first." \
+            "$BUNDLE is the whole tool: script, docs and the" \
+            "binaries under bins/. Unpack it and run --verify first." \
+            "" \
+            "Tested on BE5000 / RD18 / MiWiFi 1.0.91." \
             "" \
             "Verify: sha256sum -c <(grep dropbear SHA256SUMS.txt)" > NOTES.md
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
-            "be5000-root-${VER}-armv7.tar.gz" \
+          gh release create "$RTAG" --repo "$GITHUB_REPOSITORY" \
+            "$BUNDLE" \
             dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt BUNDLE-MANIFEST.txt \
             self/LICENSE self/THIRD_PARTY_NOTICES.md \
-            --title "dropbear ${VER} armv7 static (soft-float, EABI5)" \
+            --title "miwifi-root $RTAG" \
             --notes-file NOTES.md
