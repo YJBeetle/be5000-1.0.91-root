@@ -144,16 +144,19 @@ jobs:
             echo "musl tarball    : $(cat "$GITHUB_WORKSPACE/musl.sha256")"
             echo "built by        : $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } >> SHA256SUMS.txt
-          cp dropbear dropbearkey SHA256SUMS.txt "$GITHUB_WORKSPACE/"
+          # $GITHUB_WORKSPACE/dropbear is the source tree, so the outputs must not
+          # be copied to the workspace root under the same names.
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp dropbear dropbearkey SHA256SUMS.txt "$GITHUB_WORKSPACE/dist/"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dropbear-${{ github.event.inputs.dropbear_version }}-armv7-static
           path: |
-            dropbear
-            dropbearkey
-            SHA256SUMS.txt
+            dist/dropbear
+            dist/dropbearkey
+            dist/SHA256SUMS.txt
           if-no-files-found: error
 
       # Actions artifacts cannot be downloaded without a token; Release assets
@@ -167,14 +170,14 @@ jobs:
           TAG="dropbear-${VER}-armv7-static"
           STAGE="be5000-root"
           mkdir -p "$STAGE/be5000_bins"
-          cp dropbear dropbearkey SHA256SUMS.txt "$STAGE/be5000_bins/"
-          cp "$STAGE/be5000_bins/SHA256SUMS.txt" "$STAGE/SHA256SUMS.txt"
+          cp dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt "$STAGE/be5000_bins/"
+          cp dist/SHA256SUMS.txt "$STAGE/SHA256SUMS.txt"
           for f in be5000_root.py README.md README.cn.md; do
             [ -f "self/$f" ] && cp "self/$f" "$STAGE/" || echo "not in repo yet, skipped: $f"
           done
           ( cd "$STAGE" && find . -type f -printf '%P\n' | sort > ../BUNDLE-MANIFEST.txt )
           tar czf "be5000-root-${VER}-armv7.tar.gz" "$STAGE" BUNDLE-MANIFEST.txt
-          sha256sum "be5000-root-${VER}-armv7.tar.gz" | tee -a SHA256SUMS.txt
+          sha256sum "be5000-root-${VER}-armv7.tar.gz" | tee -a dist/SHA256SUMS.txt
 
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
           printf '%s\n' \
@@ -187,6 +190,6 @@ jobs:
             "Verify: sha256sum -c <(grep dropbear SHA256SUMS.txt)" > NOTES.md
           gh release create "$TAG" \
             "be5000-root-${VER}-armv7.tar.gz" \
-            dropbear dropbearkey SHA256SUMS.txt BUNDLE-MANIFEST.txt \
+            dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt BUNDLE-MANIFEST.txt \
             --title "dropbear ${VER} armv7 static (soft-float, EABI5)" \
             --notes-file NOTES.md
