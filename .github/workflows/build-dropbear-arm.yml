@@ -38,7 +38,7 @@ on:
         default: "1.2.5"
         required: true
       publish_release:
-        description: "also publish the binaries as a GitHub Release so be5000_root.py can fetch them"
+        description: "also publish the binaries as a GitHub Release, which unlike Actions artifacts can be fetched without a token"
         type: choice
         default: "false"
         options: ["false", "true"]
@@ -172,7 +172,7 @@ jobs:
           mkdir -p "$STAGE/be5000_bins"
           cp dist/dropbear dist/dropbearkey dist/SHA256SUMS.txt "$STAGE/be5000_bins/"
           cp dist/SHA256SUMS.txt "$STAGE/SHA256SUMS.txt"
-          for f in be5000_root.py README.md README.cn.md LICENSE THIRD_PARTY_NOTICES.md; do
+          for f in miwifi_root.py README.md README.cn.md LICENSE THIRD_PARTY_NOTICES.md; do
             [ -f "self/$f" ] && cp "self/$f" "$STAGE/" || echo "not in repo yet, skipped: $f"
           done
           ( cd "$STAGE" && find . -type f -printf '%P\n' | sort > ../BUNDLE-MANIFEST.txt )
